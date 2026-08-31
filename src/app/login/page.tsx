@@ -17,10 +17,11 @@ export default function LoginPage() {
   const supabase = createClient()
 
   // Google OAuth Login
+ // Google OAuth Login
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/dashboard` },
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     })
   }
 
