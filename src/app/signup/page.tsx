@@ -20,9 +20,15 @@ export default function SignupPage() {
     setError('')
     setLoading(true)
 
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    // Pass org_name inside options.data (user_metadata)
+    const { data, error: authError } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          org_name: orgName,
+        },
+      },
     })
 
     if (authError) {
@@ -31,35 +37,7 @@ export default function SignupPage() {
       return
     }
 
-    if (authData.user) {
-      const { data: orgData, error: orgError } = await supabase
-        .from('organizations')
-        .insert([{ name: orgName }])
-        .select()
-        .single()
-
-      if (orgError) {
-        setError(orgError.message)
-        setLoading(false)
-        return
-      }
-
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert([
-          {
-            id: authData.user.id,
-            organization_id: orgData.id,
-            role: 'admin',
-          },
-        ])
-
-      if (profileError) {
-        setError(profileError.message)
-        setLoading(false)
-        return
-      }
-
+    if (data.user) {
       router.push('/dashboard')
       router.refresh()
     }
