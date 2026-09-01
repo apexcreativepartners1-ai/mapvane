@@ -26,11 +26,10 @@ export async function POST(request: NextRequest) {
     }
   )
 
-  // Clear Supabase session
   await supabase.auth.signOut()
 
-  // Redirect to login page
-  return NextResponse.redirect(new URL('/login', request.url), {
+  // Redirect to home screen
+  return NextResponse.redirect('https://mapvane.app', {
     status: 302,
   })
 }
