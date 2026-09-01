@@ -1,49 +1,29 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
-import LogoutButton from './logout-button'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 
-export default async function DashboardPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) redirect('/login')
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, organizations(name)')
-    .eq('id', user.id)
-    .single()
-
-  const orgName = (profile?.organizations as any)?.name || 'My Organization'
-
+export default function DashboardPage() {
   return (
-    <div className="p-8 max-w-6xl mx-auto">
-      <div className="flex justify-between items-center border-b border-slate-800 pb-6 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Dashboard</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Organization: <span className="text-teal-400 font-semibold">{orgName}</span> ({profile?.role || 'admin'})
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="text-xs text-slate-400">{user.email || user.phone}</span>
-          <LogoutButton />
-        </div>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold tracking-tight text-white">
+          Overview
+        </h1>
+        <Button variant="primary">Add Location</Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 backdrop-blur-sm">
-          <h3 className="text-slate-400 text-sm font-medium">Total Locations</h3>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <p className="text-sm font-medium text-slate-400">Total Locations</p>
           <p className="text-3xl font-bold text-white mt-2">0</p>
-        </div>
-        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 backdrop-blur-sm">
-          <h3 className="text-slate-400 text-sm font-medium">Average Rating</h3>
-          <p className="text-3xl font-bold text-white mt-2">0.0 ★</p>
-        </div>
-        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 backdrop-blur-sm">
-          <h3 className="text-slate-400 text-sm font-medium">Pending Reviews</h3>
+        </Card>
+        <Card>
+          <p className="text-sm font-medium text-slate-400">Average Rating</p>
+          <p className="text-3xl font-bold text-teal-400 mt-2">--</p>
+        </Card>
+        <Card>
+          <p className="text-sm font-medium text-slate-400">Pending Reviews</p>
           <p className="text-3xl font-bold text-white mt-2">0</p>
-        </div>
+        </Card>
       </div>
     </div>
   )
