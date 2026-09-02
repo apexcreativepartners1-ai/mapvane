@@ -8,6 +8,7 @@ export interface DashboardStats {
   activeLocations: number
   totalReviews: number
   averageRating: number
+  pendingResponses: number
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
@@ -33,28 +34,27 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     }
   )
 
-  // Fetch count of locations (RLS automatically scopes to user)
-  const { data: locations, error } = await supabase
-    .from('locations')
-    .select('status')
+  const [locationsRes, reviewsRes] = await Promise.all([
+    supabase.from('locations').select('status'),
+    supabase.from('reviews').select('rating, status'),
+  ])
 
-  if (error || !locations) {
-    return {
-      totalLocations: 0,
-      activeLocations: 0,
-      totalReviews: 0,
-      averageRating: 0,
-    }
-  }
+  const locations = locationsRes.data || []
+  const reviews = reviewsRes.data || []
 
   const totalLocations = locations.length
   const activeLocations = locations.filter((l) => l.status === 'active').length
+  const totalReviews = reviews.length
 
-  // Placeholder review aggregates until Day 5 schema integration
+  const sumRating = reviews.reduce((acc, r) => acc + r.rating, 0)
+  const averageRating = totalReviews > 0 ? Number((sumRating / totalReviews).toFixed(1)) : 0
+  const pendingResponses = reviews.filter((r) => r.status === 'unanswered').length
+
   return {
     totalLocations,
     activeLocations,
-    totalReviews: 0,
-    averageRating: 0.0,
+    totalReviews,
+    averageRating,
+    pendingResponses,
   }
 }
