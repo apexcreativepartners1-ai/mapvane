@@ -72,3 +72,28 @@ export async function addReview(formData: CreateReviewInput) {
   revalidatePath('/dashboard')
   return data
 }
+
+export async function respondToReview(reviewId: string, responseText: string) {
+  const supabase = await getSupabaseServerClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const { data, error } = await supabase
+    .from('reviews')
+    .update({
+      response_text: responseText,
+      response_date: new Date().toISOString(),
+      status: 'responded',
+    })
+    .eq('id', reviewId)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  revalidatePath('/dashboard')
+  return data
+}
