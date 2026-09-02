@@ -11,6 +11,7 @@ import { MetricCard } from '@/components/ui/metric-card'
 import { AddLocationModal } from '@/components/add-location-modal'
 import { ReviewsFeed } from '@/components/reviews-feed'
 import { deleteLocation } from '@/app/actions/locations'
+import { triggerReviewSync } from '@/app/actions/sync'
 
 interface DashboardClientProps {
   initialLocations: Location[]
@@ -25,6 +26,19 @@ export function DashboardClient({
 }: DashboardClientProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [isSyncing, setIsSyncing] = useState(false)
+
+  const handleSync = async () => {
+    setIsSyncing(true)
+    try {
+      const res = await triggerReviewSync()
+      alert(`Sync completed! ${res.syncedCount} review items processed across active channels.`)
+    } catch (err: any) {
+      alert(err.message || 'Failed to sync platform channels')
+    } finally {
+      setIsSyncing(false)
+    }
+  }
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this location?')) return
@@ -48,9 +62,14 @@ export function DashboardClient({
             Overview of store metrics, performance, and customer feedback.
           </p>
         </div>
-        <Button variant="primary" onClick={() => setIsModalOpen(true)}>
-          + Add Location
-        </Button>
+        <div className="flex items-center space-x-3">
+          <Button variant="secondary" onClick={handleSync} disabled={isSyncing}>
+            {isSyncing ? 'Syncing...' : '↻ Sync Data'}
+          </Button>
+          <Button variant="primary" onClick={() => setIsModalOpen(true)}>
+            + Add Location
+          </Button>
+        </div>
       </div>
 
       {/* KPI Stats Grid */}
