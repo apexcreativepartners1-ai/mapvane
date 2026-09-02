@@ -72,11 +72,17 @@ export async function triggerReviewSync(locationId?: string) {
       // Upsert into Supabase to prevent duplicate reviews
       const { error: insertError } = await supabase
         .from('reviews')
-        .upsert(dbPayloads, { onConflict: 'location_id,platform,external_id', ignoreDuplicates: true })
+        .upsert(dbPayloads, {
+          onConflict: 'location_id,platform,external_id',
+          ignoreDuplicates: true,
+        })
 
-      if (!insertError) {
-        totalSynced += rawReviews.length
+      if (insertError) {
+        console.error('Upsert Error:', insertError)
+        throw new Error(insertError.message)
       }
+
+      totalSynced += rawReviews.length
     }
   }
 

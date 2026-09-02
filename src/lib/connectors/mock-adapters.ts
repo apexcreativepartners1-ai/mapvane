@@ -4,25 +4,24 @@ export class MockGoogleConnector implements PlatformConnector {
   platform = 'google' as const
 
   async fetchReviews(externalLocationId: string): Promise<RawExternalReview[]> {
-    // Simulate network delay
     await new Promise((resolve) => setTimeout(resolve, 300))
 
     return [
       {
-        externalId: `g_rev_${Date.now()}_1`,
+        externalId: 'g_rev_101',
         authorName: 'Sarah Jenkins',
         authorAvatar: 'https://i.pravatar.cc/150?u=sarah',
         rating: 5,
         content: 'Absolute top-notch service! The staff was attentive and store was spotless.',
-        reviewDate: new Date(Date.now() - 3600000 * 4).toISOString(), // 4 hours ago
+        reviewDate: '2026-03-01T10:00:00Z',
         platform: 'google',
       },
       {
-        externalId: `g_rev_${Date.now()}_2`,
+        externalId: 'g_rev_102',
         authorName: 'Michael Brown',
         rating: 2,
         content: 'Long wait times during lunch peak. Quality of service has dropped recently.',
-        reviewDate: new Date(Date.now() - 3600000 * 24).toISOString(), // 1 day ago
+        reviewDate: '2026-03-01T11:30:00Z',
         platform: 'google',
       },
     ]
@@ -37,11 +36,11 @@ export class MockAppleConnector implements PlatformConnector {
 
     return [
       {
-        externalId: `a_rev_${Date.now()}_1`,
+        externalId: 'a_rev_201',
         authorName: 'David K.',
         rating: 4,
         content: 'Great experience overall. Easy to find location and parking.',
-        reviewDate: new Date(Date.now() - 3600000 * 12).toISOString(),
+        reviewDate: '2026-03-01T14:15:00Z',
         platform: 'apple',
       },
     ]
@@ -56,11 +55,11 @@ export class MockYelpConnector implements PlatformConnector {
 
     return [
       {
-        externalId: `y_rev_${Date.now()}_1`,
+        externalId: 'y_rev_301',
         authorName: 'Amanda L.',
         rating: 1,
         content: 'Extremely disappointing customer care. Unfriendly representative.',
-        reviewDate: new Date(Date.now() - 3600000 * 48).toISOString(),
+        reviewDate: '2026-03-01T16:45:00Z',
         platform: 'yelp',
       },
     ]
