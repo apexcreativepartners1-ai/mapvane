@@ -8,6 +8,9 @@ export interface Location {
   zip_code: string
   phone?: string | null
   website?: string | null
+  google_maps_url?: string | null
+  google_place_id?: string | null
+  apple_maps_url?: string | null
   status: 'active' | 'inactive'
   created_at: string
   updated_at: string

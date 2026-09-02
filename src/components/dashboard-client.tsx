@@ -2,17 +2,20 @@
 
 import React, { useState } from 'react'
 import { Location } from '@/types/location'
+import { DashboardStats } from '@/app/actions/stats'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { MetricCard } from '@/components/ui/metric-card'
 import { AddLocationModal } from '@/components/add-location-modal'
 import { deleteLocation } from '@/app/actions/locations'
 
 interface DashboardClientProps {
   initialLocations: Location[]
+  initialStats: DashboardStats
 }
 
-export function DashboardClient({ initialLocations }: DashboardClientProps) {
+export function DashboardClient({ initialLocations, initialStats }: DashboardClientProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
@@ -30,12 +33,12 @@ export function DashboardClient({ initialLocations }: DashboardClientProps) {
 
   return (
     <div className="space-y-6">
-      {/* Header Bar */}
+      {/* Top Bar */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Store Locations</h1>
+          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
           <p className="text-sm text-slate-400">
-            Manage your physical business locations and monitoring targets.
+            Overview of store metrics, performance, and monitoring targets.
           </p>
         </div>
         <Button variant="primary" onClick={() => setIsModalOpen(true)}>
@@ -43,64 +46,91 @@ export function DashboardClient({ initialLocations }: DashboardClientProps) {
         </Button>
       </div>
 
-      {/* Locations List / Empty State */}
-      {initialLocations.length === 0 ? (
-        <Card className="p-12 text-center border-[#1e2d3d] bg-[#111c26]">
-          <h3 className="text-lg font-medium text-white mb-1">No locations added yet</h3>
-          <p className="text-sm text-slate-400 mb-6">
-            Get started by adding your first store location to monitor reviews.
-          </p>
-          <Button variant="primary" onClick={() => setIsModalOpen(true)}>
-            Add Your First Location
-          </Button>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {initialLocations.map((loc) => (
-            <Card key={loc.id} className="p-5 border-[#1e2d3d] bg-[#111c26] flex flex-col justify-between">
-              <div className="space-y-3">
-                <div className="flex items-start justify-between">
-                  <h3 className="text-base font-semibold text-white truncate max-w-[200px]">
-                    {loc.name}
-                  </h3>
-                  <Badge variant={loc.status === 'active' ? 'teal' : 'slate'}>
-                    {loc.status}
-                  </Badge>
+      {/* KPI Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricCard
+          title="Total Locations"
+          value={initialStats.totalLocations}
+          subtitle={`${initialStats.activeLocations} active`}
+        />
+        <MetricCard
+          title="Total Reviews"
+          value={initialStats.totalReviews}
+          subtitle="Across all channels"
+        />
+        <MetricCard
+          title="Average Rating"
+          value={initialStats.averageRating > 0 ? `${initialStats.averageRating} ★` : 'N/A'}
+          subtitle="Target: 4.5+"
+        />
+        <MetricCard
+          title="Pending Responses"
+          value={0}
+          subtitle="Requires attention"
+        />
+      </div>
+
+      {/* Locations Section Header */}
+      <div className="pt-4">
+        <h2 className="text-lg font-semibold text-white mb-4">Locations</h2>
+
+        {initialLocations.length === 0 ? (
+          <Card className="p-12 text-center border-[#1e2d3d] bg-[#111c26]">
+            <h3 className="text-lg font-medium text-white mb-1">No locations added yet</h3>
+            <p className="text-sm text-slate-400 mb-6">
+              Get started by adding your first store location to monitor reviews.
+            </p>
+            <Button variant="primary" onClick={() => setIsModalOpen(true)}>
+              Add Your First Location
+            </Button>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {initialLocations.map((loc) => (
+              <Card key={loc.id} className="p-5 border-[#1e2d3d] bg-[#111c26] flex flex-col justify-between">
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between">
+                    <h3 className="text-base font-semibold text-white truncate max-w-[200px]">
+                      {loc.name}
+                    </h3>
+                    <Badge variant={loc.status === 'active' ? 'teal' : 'slate'}>
+                      {loc.status}
+                    </Badge>
+                  </div>
+
+                  <div className="text-xs text-slate-400 space-y-1">
+                    <p>{loc.address}</p>
+                    <p>{loc.city}, {loc.state} {loc.zip_code}</p>
+                    {loc.phone && <p className="text-slate-500">{loc.phone}</p>}
+                  </div>
                 </div>
 
-                <div className="text-xs text-slate-400 space-y-1">
-                  <p>{loc.address}</p>
-                  <p>{loc.city}, {loc.state} {loc.zip_code}</p>
-                  {loc.phone && <p className="text-slate-500">{loc.phone}</p>}
-                </div>
-              </div>
-
-              <div className="pt-4 mt-4 border-t border-[#1e2d3d] flex items-center justify-between text-xs">
-                {loc.website ? (
-                  <a
-                    href={loc.website}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-teal-400 hover:underline truncate max-w-[150px]"
+                <div className="pt-4 mt-4 border-t border-[#1e2d3d] flex items-center justify-between text-xs">
+                  {loc.website ? (
+                    <a
+                      href={loc.website}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-teal-400 hover:underline truncate max-w-[150px]"
+                    >
+                      Visit website
+                    </a>
+                  ) : <span />}
+                  
+                  <button
+                    onClick={() => handleDelete(loc.id)}
+                    disabled={deletingId === loc.id}
+                    className="text-rose-400 hover:text-rose-300 font-medium"
                   >
-                    Visit website
-                  </a>
-                ) : <span />}
-                
-                <button
-                  onClick={() => handleDelete(loc.id)}
-                  disabled={deletingId === loc.id}
-                  className="text-rose-400 hover:text-rose-300 font-medium"
-                >
-                  {deletingId === loc.id ? 'Deleting...' : 'Delete'}
-                </button>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
+                    {deletingId === loc.id ? 'Deleting...' : 'Delete'}
+                  </button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
 
-      {/* Add Location Modal */}
       <AddLocationModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
