@@ -4,20 +4,24 @@ import { PlatformConnector, RawExternalReview } from '@/types/connector'
 async function getMockDataFromDb(platform: string, externalLocationId: string): Promise<RawExternalReview[]> {
   const supabase = await createClient()
 
-  // Fetch templates assigned specifically to this location ID, OR unassigned generic templates
+  // Query templates strictly matching this location and platform
   const { data: templates, error } = await supabase
     .from('mock_review_templates')
     .select('*')
     .eq('platform', platform)
-    .or(`location_id.eq.${externalLocationId},location_id.is.null`)
+    .eq('location_id', externalLocationId)
 
-  if (error || !templates) {
+  if (error) {
     console.error(`Error fetching mock templates for ${platform}:`, error)
     return []
   }
 
+  if (!templates || templates.length === 0) {
+    return []
+  }
+
   return templates.map((t) => ({
-    externalId: `${t.template_key}_${externalLocationId.slice(0, 8)}`,
+    externalId: t.template_key, // Use static template_key directly as external_id
     authorName: t.author_name,
     authorAvatar: t.author_avatar || `https://i.pravatar.cc/150?u=${t.template_key}`,
     rating: t.rating,
