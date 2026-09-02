@@ -1,99 +1,49 @@
 'use server'
 
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { Review, CreateReviewInput } from '@/types/review'
 
-async function getSupabaseServerClient() {
-  const cookieStore = await cookies()
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          } catch {
-            // Handled in middleware
-          }
-        },
-      },
-    }
-  )
-}
+// 1. Reply to a single review
+export async function replyToReview(reviewId: string, replyText: string) {
+  const supabase = await createClient()
 
-export async function getReviews(locationId?: string): Promise<Review[]> {
-  const supabase = await getSupabaseServerClient()
-  
-  let query = supabase.from('reviews').select('*').order('review_date', { ascending: false })
-  
-  if (locationId) {
-    query = query.eq('location_id', locationId)
-  }
-
-  const { data, error } = await query
-
-  if (error) {
-    console.error('Error fetching reviews:', error.message)
-    return []
-  }
-
-  return data as Review[]
-}
-
-export async function addReview(formData: CreateReviewInput) {
-  const supabase = await getSupabaseServerClient()
-  
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Unauthorized')
-
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('reviews')
-    .insert([
-      {
-        ...formData,
-        user_id: user.id,
-      },
-    ])
-    .select()
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  revalidatePath('/dashboard')
-  return data
-}
-
-export async function respondToReview(reviewId: string, responseText: string) {
-  const supabase = await getSupabaseServerClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Unauthorized')
-
-  const { data, error } = await supabase
-    .from('reviews')
-    .update({
-      response_text: responseText,
-      response_date: new Date().toISOString(),
-      status: 'responded',
+    .update({ 
+      is_answered: true,
+      // You can also store reply_content if you have a column for it:
+      // reply_content: replyText,
+      // replied_at: new Date().toISOString()
     })
     .eq('id', reviewId)
-    .select()
-    .single()
 
   if (error) {
-    throw new Error(error.message)
+    console.error('Error replying to review:', error)
+    return { success: false, error: error.message }
   }
 
   revalidatePath('/dashboard')
-  return data
+  return { success: true }
+}
+
+// 2. Reply to multiple reviews in bulk
+export async function bulkReplyToReviews(reviewIds: string[], replyText: string) {
+  if (!reviewIds || reviewIds.length === 0) {
+    return { success: false, error: 'No review IDs provided' }
+  }
+
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('reviews')
+    .update({ is_answered: true })
+    .in('id', reviewIds)
+
+  if (error) {
+    console.error('Error in bulk review reply:', error)
+    return { success: false, error: error.message }
+  }
+
+  revalidatePath('/dashboard')
+  return { success: true }
 }

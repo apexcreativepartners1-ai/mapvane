@@ -3,7 +3,7 @@
 import React, { useState } from 'react'
 import { Review } from '@/types/review'
 import { Button } from '@/components/ui/button'
-import { respondToReview } from '@/app/actions/reviews'
+import { replyToReview } from '@/app/actions/reviews'
 
 interface RespondModalProps {
   review: Review | null
@@ -42,7 +42,7 @@ export function RespondModal({ review, isOpen, onClose }: RespondModalProps) {
     setError(null)
 
     try {
-      await respondToReview(review.id, responseText)
+      await replyToReview(review.id, responseText)
       setResponseText('')
       onClose()
     } catch (err: any) {

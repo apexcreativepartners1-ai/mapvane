@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useTransition } from 'react'
 import { ReviewRecord } from '@/app/dashboard/page'
+import { replyToReview, bulkReplyToReviews } from '@/app/actions/reviews'
 import { triggerReviewSync } from '@/app/actions/sync'
 import { 
   Star, Search, CheckCircle, Clock, RefreshCw, 
@@ -34,6 +35,8 @@ export default function ReviewTableSection({
   const [activeReplyReview, setActiveReplyReview] = useState<ReviewRecord | null>(null)
   const [replyText, setReplyText] = useState<string>('')
   const [isBulkModalOpen, setIsBulkModalOpen] = useState<boolean>(false)
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
+  const [bulkPromptText, setBulkPromptText] = useState<string>('')
 
   // Filter Engine
   const filteredReviews = useMemo(() => {
@@ -73,6 +76,37 @@ export default function ReviewTableSection({
     startTransition(async () => {
       await triggerReviewSync()
     })
+  }
+
+  const handleSendSingleReply = async () => {
+    if (!activeReplyReview) return
+    setIsSubmitting(true)
+
+    const res = await replyToReview(activeReplyReview.id, replyText)
+
+    setIsSubmitting(false)
+    if (res.success) {
+      setActiveReplyReview(null)
+      setReplyText('')
+    } else {
+      alert(`Failed to send reply: ${res.error}`)
+    }
+  }
+
+  const handleSendBulkReply = async () => {
+    if (selectedReviewIds.length === 0) return
+    setIsSubmitting(true)
+
+    const res = await bulkReplyToReviews(selectedReviewIds, bulkPromptText)
+
+    setIsSubmitting(false)
+    if (res.success) {
+      setSelectedReviewIds([])
+      setIsBulkModalOpen(false)
+      setBulkPromptText('')
+    } else {
+      alert(`Failed to complete bulk reply: ${res.error}`)
+    }
   }
 
   return (
@@ -286,13 +320,11 @@ export default function ReviewTableSection({
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  alert(`Response submitted for review ${activeReplyReview.id}!`)
-                  setActiveReplyReview(null)
-                }}
-                className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg"
+                onClick={handleSendSingleReply}
+                disabled={isSubmitting}
+                className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50"
               >
-                Send Reply
+                {isSubmitting ? 'Sending...' : 'Send Reply'}
               </button>
             </div>
           </div>
@@ -313,6 +345,8 @@ export default function ReviewTableSection({
             <textarea
               rows={4}
               placeholder="Enter template or AI prompt for selected reviews..."
+              value={bulkPromptText}
+              onChange={(e) => setBulkPromptText(e.target.value)}
               className="w-full p-3 text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             <div className="flex justify-end gap-2">
@@ -323,14 +357,11 @@ export default function ReviewTableSection({
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  alert(`Dispatched responses for ${selectedReviewIds.length} reviews!`)
-                  setSelectedReviewIds([])
-                  setIsBulkModalOpen(false)
-                }}
-                className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg"
+                onClick={handleSendBulkReply}
+                disabled={isSubmitting}
+                className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50"
               >
-                Batch Dispatch
+                {isSubmitting ? 'Processing...' : 'Batch Dispatch'}
               </button>
             </div>
           </div>
