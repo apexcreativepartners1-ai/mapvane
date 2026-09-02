@@ -1,6 +1,6 @@
 'use client'
 
-import { Store, Star, MessageSquareWarning, CheckCircle2 } from 'lucide-react'
+import { Store, Star, MessageSquareWarning, CheckCircle2, AlertTriangle } from 'lucide-react'
 
 export interface LocationWithStats {
   id: string
@@ -47,15 +47,17 @@ export default function LocationKpiCards({
             }`}
           >
             {/* Status Callout Badge */}
-            {loc.unansweredCount > 0 ? (
-              <div className="absolute top-0 right-0 bg-amber-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg tracking-wide uppercase">
-                {loc.unansweredCount} Pending
-              </div>
-            ) : (
-              <div className="absolute top-0 right-0 bg-emerald-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg tracking-wide uppercase">
-                All Clear
-              </div>
-            )}
+            <div className="absolute top-3 right-3">
+              {loc.unansweredCount === 0 ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                  ✓ All Clear 🎉
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-600 dark:text-amber-400">
+                  {loc.unansweredCount} <AlertTriangle className="w-3.5 h-3.5" />
+                </span>
+              )}
+            </div>
 
             <div className="flex items-center gap-3 mb-4">
               <div

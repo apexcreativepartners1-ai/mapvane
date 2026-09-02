@@ -56,12 +56,18 @@ export default function ReviewTableSection({
     })
   }, [reviews, selectedLocationId, selectedRating, selectedStatus, searchQuery])
 
+  const unansweredReviews = useMemo(() => {
+    return filteredReviews.filter((r) => !r.is_answered)
+  }, [filteredReviews])
+
   // Bulk Selection Handlers
   const toggleSelectAll = () => {
-    if (selectedReviewIds.length === filteredReviews.length) {
+    if (unansweredReviews.length === 0) return
+
+    if (selectedReviewIds.length === unansweredReviews.length) {
       setSelectedReviewIds([])
     } else {
-      setSelectedReviewIds(filteredReviews.map((r) => r.id))
+      setSelectedReviewIds(unansweredReviews.map((r) => r.id))
     }
   }
 
@@ -178,7 +184,7 @@ export default function ReviewTableSection({
           {/* Requirement 3: Bulk Answer Action */}
           <button
             onClick={() => setIsBulkModalOpen(true)}
-            disabled={selectedReviewIds.length === 0}
+            disabled={selectedReviewIds.length === 0 || unansweredReviews.length === 0}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Sparkles className="w-3.5 h-3.5" />
@@ -204,8 +210,12 @@ export default function ReviewTableSection({
           <thead className="bg-slate-100/70 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 uppercase text-[10px] font-bold tracking-wider text-slate-500">
             <tr>
               <th className="py-3 px-4 w-10">
-                <button onClick={toggleSelectAll} className="text-slate-400 hover:text-indigo-600">
-                  {selectedReviewIds.length > 0 && selectedReviewIds.length === filteredReviews.length ? (
+                <button
+                  onClick={toggleSelectAll}
+                  disabled={unansweredReviews.length === 0}
+                  className="text-slate-400 hover:text-indigo-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  {selectedReviewIds.length > 0 && selectedReviewIds.length === unansweredReviews.length ? (
                     <CheckSquare className="w-4 h-4 text-indigo-600" />
                   ) : (
                     <Square className="w-4 h-4" />
@@ -235,7 +245,11 @@ export default function ReviewTableSection({
                 return (
                   <tr key={review.id} className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors ${isSelected ? 'bg-indigo-50/20' : ''}`}>
                     <td className="py-3.5 px-4">
-                      <button onClick={() => toggleSelectRow(review.id)} className="text-slate-400 hover:text-indigo-600">
+                      <button
+                        onClick={() => toggleSelectRow(review.id)}
+                        disabled={review.is_answered}
+                        className="text-slate-400 hover:text-indigo-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
                         {isSelected ? <CheckSquare className="w-4 h-4 text-indigo-600" /> : <Square className="w-4 h-4" />}
                       </button>
                     </td>

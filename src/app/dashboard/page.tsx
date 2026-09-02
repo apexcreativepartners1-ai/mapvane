@@ -89,8 +89,12 @@ export default async function DashboardPage() {
     <div className="container mx-auto p-6 space-y-8">
       <div className="flex justify-between items-center border-b pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Store Analytics & Reviews</h1>
-          <p className="text-sm text-slate-500">Real-time performance metrics across your store network.</p>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-50">
+            Store Analytics & Reviews
+          </h1>
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            Real-time performance metrics across your store network.
+          </p>
         </div>
       </div>
 
