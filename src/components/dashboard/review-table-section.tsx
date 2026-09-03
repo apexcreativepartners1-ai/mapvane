@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useTransition } from 'react'
 import { ReviewRecord } from '@/app/dashboard/page'
-import { generateSingleAIReply, generateBulkAIReplies } from '@/app/actions/ai'
+import { generateSingleAIReply, generateBulkAIReplies, ReplyTone } from '@/app/actions/ai'
 import { replyToReview } from '@/app/actions/reviews'
 import { triggerReviewSync } from '@/app/actions/sync'
 import { 
@@ -48,6 +48,7 @@ export default function ReviewTableSection({
   const [selectedReviewIds, setSelectedReviewIds] = useState<string[]>([])
   const [activeReplyReview, setActiveReplyReview] = useState<ReviewRecord | null>(null)
   const [singleReplyText, setSingleReplyText] = useState<string>('')
+  const [selectedTone, setSelectedTone] = useState<ReplyTone>('professional')
   const [isGeneratingSingle, setIsGeneratingSingle] = useState<boolean>(false)
   const [isBulkModalOpen, setIsBulkModalOpen] = useState<boolean>(false)
   const [bulkDrafts, setBulkDrafts] = useState<Record<string, string>>({})
@@ -71,6 +72,22 @@ export default function ReviewTableSection({
       return true
     })
   }, [reviews, selectedLocationId, selectedRating, selectedStatus, searchQuery])
+
+  const analytics = useMemo(() => {
+    const total = filteredReviews.length
+    if (total === 0) return { total: 0, responseRate: 0, avgRating: '0.0', pendingCount: 0 }
+
+    const answered = filteredReviews.filter((r) => r.is_answered).length
+    const pending = total - answered
+    const sumRating = filteredReviews.reduce((acc, r) => acc + r.rating, 0)
+
+    return {
+      total,
+      responseRate: Math.round((answered / total) * 100),
+      avgRating: (sumRating / total).toFixed(1),
+      pendingCount: pending,
+    }
+  }, [filteredReviews])
 
   const unansweredReviews = useMemo(() => {
     return filteredReviews.filter((r) => !r.is_answered)
@@ -126,6 +143,7 @@ export default function ReviewTableSection({
       authorName: activeReplyReview.author_name,
       rating: activeReplyReview.rating,
       content: activeReplyReview.content,
+      tone: selectedTone,
     })
 
     setSingleReplyText(result.draft)
@@ -175,6 +193,27 @@ export default function ReviewTableSection({
 
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-100/50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800">
+        <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
+          <p className="text-[10px] uppercase font-bold text-slate-500">Total Reviews</p>
+          <p className="text-lg font-extrabold text-slate-900 dark:text-slate-100">{analytics.total}</p>
+        </div>
+        <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
+          <p className="text-[10px] uppercase font-bold text-slate-500">Average Rating</p>
+          <p className="text-lg font-extrabold text-amber-500 flex items-center gap-1">
+            {analytics.avgRating} ★
+          </p>
+        </div>
+        <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
+          <p className="text-[10px] uppercase font-bold text-slate-500">Response Rate</p>
+          <p className="text-lg font-extrabold text-emerald-600">{analytics.responseRate}%</p>
+        </div>
+        <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
+          <p className="text-[10px] uppercase font-bold text-slate-500">Pending Action</p>
+          <p className="text-lg font-extrabold text-amber-600">{analytics.pendingCount}</p>
+        </div>
+      </div>
+
       {/* Top Action & Filter Bar */}
       <div className="p-4 bg-slate-50/90 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex flex-wrap gap-3 items-center justify-between">
         <div className="flex flex-wrap items-center gap-3">
@@ -390,14 +429,27 @@ export default function ReviewTableSection({
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Response</label>
-                <button
-                  onClick={handleGenerateSingleDraft}
-                  disabled={isGeneratingSingle}
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 disabled:opacity-50"
-                >
-                  {isGeneratingSingle ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                  {isGeneratingSingle ? 'Analyzing Sentiment...' : 'Auto-Draft with AI'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={selectedTone}
+                    onChange={(e) => setSelectedTone(e.target.value as ReplyTone)}
+                    className="px-2 py-1 text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-md"
+                  >
+                    <option value="professional">Professional</option>
+                    <option value="friendly">Friendly</option>
+                    <option value="apologetic">Apologetic</option>
+                    <option value="short">Short &amp; Direct</option>
+                  </select>
+
+                  <button
+                    onClick={handleGenerateSingleDraft}
+                    disabled={isGeneratingSingle}
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 disabled:opacity-50"
+                  >
+                    {isGeneratingSingle ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                    {isGeneratingSingle ? 'Analyzing Sentiment...' : 'Auto-Draft with AI'}
+                  </button>
+                </div>
               </div>
               <textarea
                 rows={4}
