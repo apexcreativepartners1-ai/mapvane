@@ -2,11 +2,13 @@
 
 import { useState, useMemo, useTransition } from 'react'
 import { ReviewRecord } from '@/app/dashboard/page'
-import { replyToReview, bulkReplyToReviews } from '@/app/actions/reviews'
+import { generateSingleAIReply, generateBulkAIReplies } from '@/app/actions/ai'
+import { replyToReview } from '@/app/actions/reviews'
 import { triggerReviewSync } from '@/app/actions/sync'
 import { 
   Star, Search, CheckCircle, Clock, RefreshCw, 
-  MessageSquare, Sparkles, XCircle, CheckSquare, Square 
+  MessageSquare, Sparkles, XCircle, CheckSquare, Square,
+  Loader2, Send, X
 } from 'lucide-react'
 
 interface Props {
@@ -33,10 +35,12 @@ export default function ReviewTableSection({
   // Selection & Modal States
   const [selectedReviewIds, setSelectedReviewIds] = useState<string[]>([])
   const [activeReplyReview, setActiveReplyReview] = useState<ReviewRecord | null>(null)
-  const [replyText, setReplyText] = useState<string>('')
+  const [singleReplyText, setSingleReplyText] = useState<string>('')
+  const [isGeneratingSingle, setIsGeneratingSingle] = useState<boolean>(false)
   const [isBulkModalOpen, setIsBulkModalOpen] = useState<boolean>(false)
+  const [bulkDrafts, setBulkDrafts] = useState<Record<string, string>>({})
+  const [isGeneratingBulk, setIsGeneratingBulk] = useState<boolean>(false)
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
-  const [bulkPromptText, setBulkPromptText] = useState<string>('')
 
   // Filter Engine
   const filteredReviews = useMemo(() => {
@@ -88,31 +92,66 @@ export default function ReviewTableSection({
     if (!activeReplyReview) return
     setIsSubmitting(true)
 
-    const res = await replyToReview(activeReplyReview.id, replyText)
+    const res = await replyToReview(activeReplyReview.id, singleReplyText)
 
     setIsSubmitting(false)
     if (res.success) {
       setActiveReplyReview(null)
-      setReplyText('')
+      setSingleReplyText('')
     } else {
       alert(`Failed to send reply: ${res.error}`)
     }
   }
 
-  const handleSendBulkReply = async () => {
-    if (selectedReviewIds.length === 0) return
+  const handleGenerateSingleDraft = async () => {
+    if (!activeReplyReview) return
+    setIsGeneratingSingle(true)
+
+    const result = await generateSingleAIReply({
+      id: activeReplyReview.id,
+      authorName: activeReplyReview.author_name,
+      rating: activeReplyReview.rating,
+      content: activeReplyReview.content,
+    })
+
+    setSingleReplyText(result.draft)
+    setIsGeneratingSingle(false)
+  }
+
+  const handleOpenBulkModal = async () => {
+    setIsBulkModalOpen(true)
+    setIsGeneratingBulk(true)
+
+    const selectedReviews = reviews.filter((review) => selectedReviewIds.includes(review.id))
+    const results = await generateBulkAIReplies(
+      selectedReviews.map((review) => ({
+        id: review.id,
+        authorName: review.author_name,
+        rating: review.rating,
+        content: review.content,
+      }))
+    )
+
+    const draftMap: Record<string, string> = {}
+    results.forEach((result) => {
+      draftMap[result.reviewId] = result.draft
+    })
+
+    setBulkDrafts(draftMap)
+    setIsGeneratingBulk(false)
+  }
+
+  const handleDispatchBulkReplies = async () => {
     setIsSubmitting(true)
 
-    const res = await bulkReplyToReviews(selectedReviewIds, bulkPromptText)
+    await Promise.all(
+      Object.entries(bulkDrafts).map(([id, text]) => replyToReview(id, text))
+    )
 
     setIsSubmitting(false)
-    if (res.success) {
-      setSelectedReviewIds([])
-      setIsBulkModalOpen(false)
-      setBulkPromptText('')
-    } else {
-      alert(`Failed to complete bulk reply: ${res.error}`)
-    }
+    setSelectedReviewIds([])
+    setIsBulkModalOpen(false)
+    setBulkDrafts({})
   }
 
   return (
@@ -151,7 +190,7 @@ export default function ReviewTableSection({
 
           <select
             value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value as any)}
+            onChange={(e) => setSelectedStatus(e.target.value as 'ALL' | 'UNANSWERED' | 'ANSWERED')}
             className="px-3 py-2 text-xs font-medium bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
             <option value="ALL" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">All Response Statuses</option>
@@ -183,7 +222,7 @@ export default function ReviewTableSection({
 
           {/* Requirement 3: Bulk Answer Action */}
           <button
-            onClick={() => setIsBulkModalOpen(true)}
+            onClick={handleOpenBulkModal}
             disabled={selectedReviewIds.length === 0 || unansweredReviews.length === 0}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
@@ -274,7 +313,7 @@ export default function ReviewTableSection({
                       </div>
                     </td>
                     <td className="py-3.5 px-4 max-w-xs truncate text-slate-700 dark:text-slate-300">
-                      "{review.content}"
+                      &quot;{review.content}&quot;
                     </td>
                     <td className="py-3.5 px-4 whitespace-nowrap text-slate-400 text-[11px]">
                       {new Date(review.review_date).toLocaleDateString()}
@@ -295,7 +334,7 @@ export default function ReviewTableSection({
                       <button
                         onClick={() => {
                           setActiveReplyReview(review)
-                          setReplyText(`Hi ${review.author_name}, thank you for your feedback!`)
+                          setSingleReplyText(`Hi ${review.author_name}, thank you for your feedback!`)
                         }}
                         className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 rounded-md transition-colors"
                       >
@@ -310,72 +349,125 @@ export default function ReviewTableSection({
         </table>
       </div>
 
-      {/* Modal for Single Reply */}
+      {/* Single AI Reply Modal */}
       {activeReplyReview && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl max-w-md w-full p-5 space-y-4 shadow-xl">
-            <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">
-              Reply to {activeReplyReview.author_name} ({activeReplyReview.platform.toUpperCase()})
-            </h3>
-            <p className="text-xs bg-slate-50 dark:bg-slate-800 p-3 rounded-lg text-slate-600 dark:text-slate-300 italic">
-              "{activeReplyReview.content}"
-            </p>
-            <textarea
-              rows={4}
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              className="w-full p-3 text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setActiveReplyReview(null)}
-                className="px-3 py-1.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg"
-              >
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center">
+              <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                Reply to {activeReplyReview.author_name} ({activeReplyReview.rating}★)
+              </h3>
+              <button onClick={() => setActiveReplyReview(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg border border-slate-200/60 dark:border-slate-700">
+              <p className="text-xs text-slate-700 dark:text-slate-300 italic">
+              &quot;{activeReplyReview.content}&quot;
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Response</label>
+                <button
+                  onClick={handleGenerateSingleDraft}
+                  disabled={isGeneratingSingle}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 disabled:opacity-50"
+                >
+                  {isGeneratingSingle ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                  {isGeneratingSingle ? 'Analyzing Sentiment...' : 'Auto-Draft with AI'}
+                </button>
+              </div>
+              <textarea
+                rows={4}
+                value={singleReplyText}
+                onChange={(e) => setSingleReplyText(e.target.value)}
+                placeholder="Write a response or use AI to generate a sentiment-tailored reply..."
+                className="w-full p-3 text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setActiveReplyReview(null)} className="px-3.5 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg">
                 Cancel
               </button>
               <button
                 onClick={handleSendSingleReply}
-                disabled={isSubmitting}
-                className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50"
+                disabled={isSubmitting || !singleReplyText.trim()}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50"
               >
-                {isSubmitting ? 'Sending...' : 'Send Reply'}
+                <Send className="w-3.5 h-3.5" /> {isSubmitting ? 'Sending...' : 'Send Reply'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal for Bulk Reply */}
+      {/* Bulk Personalized Replies Modal */}
       {isBulkModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl max-w-md w-full p-5 space-y-4 shadow-xl">
-            <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-indigo-600" />
-              Bulk Answer {selectedReviewIds.length} Reviews
-            </h3>
-            <p className="text-xs text-slate-500">
-              Generate or dispatch responses for all selected reviews simultaneously across Google, Yelp, and Apple.
-            </p>
-            <textarea
-              rows={4}
-              placeholder="Enter template or AI prompt for selected reviews..."
-              value={bulkPromptText}
-              onChange={(e) => setBulkPromptText(e.target.value)}
-              className="w-full p-3 text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setIsBulkModalOpen(false)}
-                className="px-3 py-1.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg"
-              >
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl max-w-3xl w-full p-6 space-y-4 shadow-2xl max-h-[85vh] flex flex-col">
+            <div className="flex justify-between items-center border-b pb-3 border-slate-200 dark:border-slate-800">
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-indigo-600" />
+                  Bulk AI Response Inspector ({selectedReviewIds.length} Reviews)
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Review or edit each personalized draft before batch dispatch.
+                </p>
+              </div>
+              <button onClick={() => setIsBulkModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+              {isGeneratingBulk ? (
+                <div className="py-12 flex flex-col items-center justify-center space-y-3">
+                  <Loader2 className="w-7 h-7 text-indigo-600 animate-spin" />
+                  <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                    Analyzing sentiment and drafting unique replies for {selectedReviewIds.length} reviews...
+                  </p>
+                </div>
+              ) : (
+                reviews
+                  .filter((review) => selectedReviewIds.includes(review.id))
+                  .map((review) => (
+                    <div key={review.id} className="p-3.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg space-y-2">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-slate-900 dark:text-slate-100">
+                          {review.author_name} ({review.rating}★)
+                        </span>
+                        <span className="text-[10px] uppercase font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-950 px-2 py-0.5 rounded">
+                          {review.platform}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300 italic">&quot;{review.content}&quot;</p>
+                      <textarea
+                        rows={2}
+                        value={bulkDrafts[review.id] || ''}
+                        onChange={(e) => setBulkDrafts((prev) => ({ ...prev, [review.id]: e.target.value }))}
+                        className="w-full p-2.5 text-xs bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                  ))
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <button onClick={() => setIsBulkModalOpen(false)} className="px-3.5 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg">
                 Cancel
               </button>
               <button
-                onClick={handleSendBulkReply}
-                disabled={isSubmitting}
-                className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50"
+                onClick={handleDispatchBulkReplies}
+                disabled={isGeneratingBulk || isSubmitting}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50"
               >
-                {isSubmitting ? 'Processing...' : 'Batch Dispatch'}
+                {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                {isSubmitting ? 'Dispatching...' : 'Dispatch All Custom Replies'}
               </button>
             </div>
           </div>
