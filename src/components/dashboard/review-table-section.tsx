@@ -100,20 +100,22 @@ export default function ReviewTableSection({
     })
   }
 
-  const handleSendSingleReply = async () => {
-    if (!activeReplyReview) return
-    setIsSubmitting(true)
+ const handleSendSingleReply = async () => {
+  if (!activeReplyReview) return
+  setIsSubmitting(true)
 
-    const res = await replyToReview(activeReplyReview.id, singleReplyText)
+  const res = await replyToReview(activeReplyReview.id, singleReplyText)
 
-    setIsSubmitting(false)
-    if (res.success) {
-      setActiveReplyReview(null)
-      setSingleReplyText('')
-    } else {
-      alert(`Failed to send reply: ${res.error}`)
-    }
+  setIsSubmitting(false)
+  if (res.success) {
+    // FIX: Trigger the parent callback to update parent state / revalidate path
+    await onPublishReply(activeReplyReview.id)
+    setActiveReplyReview(null)
+    setSingleReplyText('')
+  } else {
+    alert(`Failed to send reply: ${res.error}`)
   }
+}
 
   const handleGenerateSingleDraft = async () => {
     if (!activeReplyReview) return
@@ -153,18 +155,23 @@ export default function ReviewTableSection({
     setIsGeneratingBulk(false)
   }
 
-  const handleDispatchBulkReplies = async () => {
-    setIsSubmitting(true)
+ const handleDispatchBulkReplies = async () => {
+  setIsSubmitting(true)
 
-    await Promise.all(
-      Object.entries(bulkDrafts).map(([id, text]) => replyToReview(id, text))
-    )
+  await Promise.all(
+    Object.entries(bulkDrafts).map(([id, text]) => replyToReview(id, text))
+  )
 
-    setIsSubmitting(false)
-    setSelectedReviewIds([])
-    setIsBulkModalOpen(false)
-    setBulkDrafts({})
-  }
+  // FIX: Notify parent state/router of all updated review IDs
+  await Promise.all(
+    Object.keys(bulkDrafts).map((id) => onPublishReply(id))
+  )
+
+  setIsSubmitting(false)
+  setSelectedReviewIds([])
+  setIsBulkModalOpen(false)
+  setBulkDrafts({})
+}
 
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">

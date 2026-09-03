@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { LocationWithStats, ReviewRecord } from '@/app/dashboard/page'
 import LocationKpiCards from './location-kpi-cards'
 import ReviewTableSection from './review-table-section'
@@ -18,6 +19,8 @@ export default function InteractiveDashboard({
   locations,
   reviews: initialReviews,
 }: Props) {
+  const router = useRouter()
+
   // 1. Local state for reviews (enables optimistic updates)
   const [reviewsList, setReviewsList] = useState<ReviewRecord[]>(initialReviews)
 
@@ -109,6 +112,7 @@ export default function InteractiveDashboard({
           r.id === reviewId ? { ...r, is_answered: true, reply_content: textToPublish } : r
         )
       )
+      router.refresh()
     } catch (error) {
       console.error('Error publishing reply:', error)
     } finally {
