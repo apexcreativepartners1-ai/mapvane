@@ -15,7 +15,13 @@ interface Props {
   locations: Array<{ id: string; name: string }>
   reviews: ReviewRecord[]
   selectedLocationId: string
-  onLocationChange: (id: string) => void
+  onLocationChange: (locationId: string) => void
+  draftReplies: Record<string, string>
+  loadingAiIds: Record<string, boolean>
+  submittingIds: Record<string, boolean>
+  onDraftChange: (reviewId: string, text: string) => void
+  onGenerateSingle: (review: ReviewRecord) => void
+  onPublishReply: (reviewId: string) => Promise<void> | void
 }
 
 export default function ReviewTableSection({
@@ -23,6 +29,12 @@ export default function ReviewTableSection({
   reviews,
   selectedLocationId,
   onLocationChange,
+  draftReplies,
+  loadingAiIds,
+  submittingIds,
+  onDraftChange,
+  onGenerateSingle,
+  onPublishReply,
 }: Props) {
   // Filter States
   const [selectedRating, setSelectedRating] = useState<string>('ALL')
