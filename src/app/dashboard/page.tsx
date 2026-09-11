@@ -24,6 +24,7 @@ export interface ReviewRecord {
   content: string
   review_date: string
   is_answered: boolean
+  reply_content?: string
 }
 
 export default async function DashboardPage() {

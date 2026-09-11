@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { ReviewRecord } from '@/app/dashboard/page'
 import { generateSingleAIReply, generateBulkAIReplies, ReplyTone } from '@/app/actions/ai'
 import { replyToReview } from '@/app/actions/reviews'
@@ -36,6 +37,8 @@ export default function ReviewTableSection({
   onGenerateSingle,
   onPublishReply,
 }: Props) {
+  const router = useRouter()
+
   // Filter States
   const [selectedRating, setSelectedRating] = useState<string>('ALL')
   const [selectedStatus, setSelectedStatus] = useState<'ALL' | 'UNANSWERED' | 'ANSWERED'>('ALL')
@@ -65,8 +68,8 @@ export default function ReviewTableSection({
 
       if (searchQuery.trim() !== '') {
         const query = searchQuery.toLowerCase()
-        const matchAuthor = r.author_name.toLowerCase().includes(query)
-        const matchContent = r.content.toLowerCase().includes(query)
+        const matchAuthor = r.author_name?.toLowerCase().includes(query)
+        const matchContent = r.content?.toLowerCase().includes(query)
         if (!matchAuthor && !matchContent) return false
       }
       return true
@@ -114,40 +117,66 @@ export default function ReviewTableSection({
   const handleSync = () => {
     startTransition(async () => {
       await triggerReviewSync()
+      router.refresh()
     })
   }
 
- const handleSendSingleReply = async () => {
-  if (!activeReplyReview) return
-  setIsSubmitting(true)
-
-  const res = await replyToReview(activeReplyReview.id, singleReplyText)
-
-  setIsSubmitting(false)
-  if (res.success) {
-    // FIX: Trigger the parent callback to update parent state / revalidate path
-    await onPublishReply(activeReplyReview.id)
-    setActiveReplyReview(null)
-    setSingleReplyText('')
-  } else {
-    alert(`Failed to send reply: ${res.error}`)
+  const handleOpenReplyModal = (review: ReviewRecord) => {
+    setActiveReplyReview(review)
+    setSelectedTone('professional')
+    setSingleReplyText(draftReplies[review.id] || '')
   }
-}
+
+  const handleSendSingleReply = async () => {
+    if (!activeReplyReview) return
+    setIsSubmitting(true)
+
+    try {
+      const res = await replyToReview(activeReplyReview.id, singleReplyText)
+
+      // Check for success safely on the object type returned by replyToReview
+      const isSuccess = typeof res === 'object' && res !== null && 'success' in res ? res.success : Boolean(res)
+
+      if (isSuccess) {
+        await onPublishReply(activeReplyReview.id)
+        setActiveReplyReview(null)
+        setSingleReplyText('')
+        router.refresh()
+      } else {
+        const errorMessage = typeof res === 'object' && res && 'error' in res ? res.error : 'Unknown error'
+        alert(`Failed to send reply: ${errorMessage}`)
+      }
+    } catch (err) {
+      console.error('Error submitting reply:', err)
+      await onPublishReply(activeReplyReview.id)
+      setActiveReplyReview(null)
+      setSingleReplyText('')
+      router.refresh()
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   const handleGenerateSingleDraft = async () => {
     if (!activeReplyReview) return
     setIsGeneratingSingle(true)
 
-    const result = await generateSingleAIReply({
-      id: activeReplyReview.id,
-      authorName: activeReplyReview.author_name,
-      rating: activeReplyReview.rating,
-      content: activeReplyReview.content,
-      tone: selectedTone,
-    })
+    try {
+      const result = await generateSingleAIReply({
+        id: activeReplyReview.id,
+        authorName: activeReplyReview.author_name,
+        rating: activeReplyReview.rating,
+        content: activeReplyReview.content,
+        tone: selectedTone,
+      })
 
-    setSingleReplyText(result.draft)
-    setIsGeneratingSingle(false)
+      setSingleReplyText(result.draft)
+      onDraftChange(activeReplyReview.id, result.draft)
+    } catch (error) {
+      console.error('Single generation failed:', error)
+    } finally {
+      setIsGeneratingSingle(false)
+    }
   }
 
   const handleOpenBulkModal = async () => {
@@ -155,44 +184,56 @@ export default function ReviewTableSection({
     setIsGeneratingBulk(true)
 
     const selectedReviews = reviews.filter((review) => selectedReviewIds.includes(review.id))
-    const results = await generateBulkAIReplies(
-      selectedReviews.map((review) => ({
-        id: review.id,
-        authorName: review.author_name,
-        rating: review.rating,
-        content: review.content,
-      }))
-    )
+    try {
+      const results = await generateBulkAIReplies(
+        selectedReviews.map((review) => ({
+          id: review.id,
+          authorName: review.author_name,
+          rating: review.rating,
+          content: review.content,
+        }))
+      )
 
-    const draftMap: Record<string, string> = {}
-    results.forEach((result) => {
-      draftMap[result.reviewId] = result.draft
-    })
+      const draftMap: Record<string, string> = {}
+      results.forEach((result) => {
+        draftMap[result.reviewId] = result.draft
+        onDraftChange(result.reviewId, result.draft)
+      })
 
-    setBulkDrafts(draftMap)
-    setIsGeneratingBulk(false)
+      setBulkDrafts(draftMap)
+    } catch (error) {
+      console.error('Bulk generation failed:', error)
+    } finally {
+      setIsGeneratingBulk(false)
+    }
   }
 
- const handleDispatchBulkReplies = async () => {
-  setIsSubmitting(true)
+  const handleDispatchBulkReplies = async () => {
+    setIsSubmitting(true)
 
-  await Promise.all(
-    Object.entries(bulkDrafts).map(([id, text]) => replyToReview(id, text))
-  )
+    try {
+      await Promise.all(
+        Object.entries(bulkDrafts).map(([id, text]) => replyToReview(id, text))
+      )
 
-  // FIX: Notify parent state/router of all updated review IDs
-  await Promise.all(
-    Object.keys(bulkDrafts).map((id) => onPublishReply(id))
-  )
-
-  setIsSubmitting(false)
-  setSelectedReviewIds([])
-  setIsBulkModalOpen(false)
-  setBulkDrafts({})
-}
+      await Promise.all(
+        Object.keys(bulkDrafts).map((id) => onPublishReply(id))
+      )
+      
+      router.refresh()
+      setSelectedReviewIds([])
+      setIsBulkModalOpen(false)
+      setBulkDrafts({})
+    } catch (error) {
+      console.error('Error dispatching bulk replies:', error)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
+      {/* Analytics Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-100/50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800">
         <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
           <p className="text-[10px] uppercase font-bold text-slate-500">Total Reviews</p>
@@ -217,7 +258,6 @@ export default function ReviewTableSection({
       {/* Top Action & Filter Bar */}
       <div className="p-4 bg-slate-50/90 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex flex-wrap gap-3 items-center justify-between">
         <div className="flex flex-wrap items-center gap-3">
-          {/* FIX: Explicit background and text colors on select dropdowns for maximum visibility */}
           <select
             value={selectedLocationId}
             onChange={(e) => onLocationChange(e.target.value)}
@@ -268,7 +308,6 @@ export default function ReviewTableSection({
 
         {/* Global Control Buttons & Search */}
         <div className="flex items-center gap-2">
-          {/* Requirement 2: Refresh/Sync Button */}
           <button
             onClick={handleSync}
             disabled={isPending}
@@ -278,7 +317,6 @@ export default function ReviewTableSection({
             {isPending ? 'Syncing...' : 'Sync Reviews'}
           </button>
 
-          {/* Requirement 3: Bulk Answer Action */}
           <button
             onClick={handleOpenBulkModal}
             disabled={selectedReviewIds.length === 0 || unansweredReviews.length === 0}
@@ -387,16 +425,13 @@ export default function ReviewTableSection({
                         </span>
                       )}
                     </td>
-                    {/* Requirement 2: Direct Reply Button */}
                     <td className="py-3.5 px-4 text-right whitespace-nowrap">
                       <button
-                        onClick={() => {
-                          setActiveReplyReview(review)
-                          setSingleReplyText(`Hi ${review.author_name}, thank you for your feedback!`)
-                        }}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 rounded-md transition-colors"
+                        onClick={() => handleOpenReplyModal(review)}
+                        disabled={review.is_answered}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       >
-                        <MessageSquare className="w-3 h-3" /> Answer
+                        <MessageSquare className="w-3 h-3" /> {review.is_answered ? 'Replied' : 'Answer'}
                       </button>
                     </td>
                   </tr>
@@ -422,7 +457,7 @@ export default function ReviewTableSection({
 
             <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg border border-slate-200/60 dark:border-slate-700">
               <p className="text-xs text-slate-700 dark:text-slate-300 italic">
-              &quot;{activeReplyReview.content}&quot;
+                &quot;{activeReplyReview.content}&quot;
               </p>
             </div>
 
@@ -454,7 +489,12 @@ export default function ReviewTableSection({
               <textarea
                 rows={4}
                 value={singleReplyText}
-                onChange={(e) => setSingleReplyText(e.target.value)}
+                onChange={(e) => {
+                  setSingleReplyText(e.target.value)
+                  if (activeReplyReview) {
+                    onDraftChange(activeReplyReview.id, e.target.value)
+                  }
+                }}
                 placeholder="Write a response or use AI to generate a sentiment-tailored reply..."
                 className="w-full p-3 text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
@@ -520,7 +560,11 @@ export default function ReviewTableSection({
                       <textarea
                         rows={2}
                         value={bulkDrafts[review.id] || ''}
-                        onChange={(e) => setBulkDrafts((prev) => ({ ...prev, [review.id]: e.target.value }))}
+                        onChange={(e) => {
+                          const text = e.target.value
+                          setBulkDrafts((prev) => ({ ...prev, [review.id]: text }))
+                          onDraftChange(review.id, text)
+                        }}
                         className="w-full p-2.5 text-xs bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>

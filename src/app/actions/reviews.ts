@@ -12,6 +12,7 @@ export async function replyToReview(reviewId: string, replyText: string) {
     .update({
       is_answered: true,
       reply_content: replyText,
+      replied_at: new Date().toISOString(),
     })
     .eq('id', reviewId)
 
@@ -34,7 +35,7 @@ export async function bulkReplyToReviews(reviewIds: string[], replyText: string)
 
   const { error } = await supabase
     .from('reviews')
-    .update({ is_answered: true, reply_content: replyText })
+    .update({ is_answered: true, response_text: replyText })
     .in('id', reviewIds)
 
   if (error) {
